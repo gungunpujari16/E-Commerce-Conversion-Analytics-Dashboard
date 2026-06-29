@@ -539,20 +539,25 @@ with tab4:
         .reset_index()
     )
     cat_friction["Conv_Rate"] *= 100
+    cat_friction["AOV"] = cat_friction["AOV"].fillna(0)
+    cat_friction = cat_friction[cat_friction["AOV"] > 0].reset_index(drop=True)
 
-    fig = px.scatter(
-        cat_friction,
-        x="Avg_Time_Per_Page", y="Conv_Rate",
-        size="AOV", color="Product_Category",
-        color_discrete_sequence=PALETTE,
-        text="Product_Category",
-        size_max=50,
-    )
-    fig.update_traces(textposition="top center", textfont_size=10)
-    style_layout(fig, "Friction Index: Avg Time Per Page vs Conversion Rate (Bubble = AOV)", height=420)
-    fig.update_layout(xaxis_title="Avg Time Per Page (min) — Higher = More Friction",
-                      yaxis_title="Conversion Rate (%)")
-    st.plotly_chart(fig, use_container_width=True)
+    if not cat_friction.empty:
+        fig = px.scatter(
+            cat_friction,
+            x="Avg_Time_Per_Page", y="Conv_Rate",
+            size="AOV", color="Product_Category",
+            color_discrete_sequence=PALETTE,
+            text="Product_Category",
+            size_max=50,
+        )
+        fig.update_traces(textposition="top center", textfont_size=10)
+        style_layout(fig, "Friction Index: Avg Time Per Page vs Conversion Rate (Bubble = AOV)", height=420)
+        fig.update_layout(xaxis_title="Avg Time Per Page (min) — Higher = More Friction",
+                          yaxis_title="Conversion Rate (%)")
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("No converted orders in current selection — adjust filters to see bubble chart.")
 
     st.markdown('<div class="insight-box">💡 <b>Insight:</b> Categories with high time-per-page but low conversion '
                 '(e.g. Electronics) indicate research-heavy shoppers who need stronger social proof and comparison tools.</div>',
@@ -565,13 +570,16 @@ with tab4:
     df_conv_filt = df[df["Converted"] == "Yes"]
 
     with c1:
-        fig = px.histogram(df_conv_filt, x="Order_Value",
-                           nbins=35, color_discrete_sequence=[BLUE])
-        fig.add_vline(x=df_conv_filt["Order_Value"].mean(), line_dash="dash",
-                      line_color=RED,
-                      annotation_text=f"Mean=${df_conv_filt['Order_Value'].mean():.0f}")
-        style_layout(fig, "Order Value Distribution", height=300)
-        st.plotly_chart(fig, use_container_width=True)
+        if df_conv_filt.empty or df_conv_filt["Order_Value"].dropna().empty:
+            st.info("No conversions in current filter.")
+        else:
+            fig = px.histogram(df_conv_filt, x="Order_Value",
+                               nbins=35, color_discrete_sequence=[BLUE])
+            fig.add_vline(x=df_conv_filt["Order_Value"].mean(), line_dash="dash",
+                          line_color=RED,
+                          annotation_text=f"Mean=${df_conv_filt['Order_Value'].mean():.0f}")
+            style_layout(fig, "Order Value Distribution", height=300)
+            st.plotly_chart(fig, use_container_width=True)
 
     with c2:
         pay_counts = df["Payment_Method"].value_counts().reset_index()
@@ -591,14 +599,19 @@ with tab4:
             .reset_index()
         )
         pay_aov.columns = ["Method", "AOV"]
-        fig = px.bar(pay_aov, x="Method", y="AOV",
-                     color="AOV", color_continuous_scale="Blues",
-                     text=pay_aov["AOV"].apply(lambda v: f"${v:.0f}"))
-        fig.update_traces(textposition="outside", textfont_size=11)
-        fig.update_layout(coloraxis_showscale=False)
-        style_layout(fig, "AOV by Payment Method ($)", height=300)
-        fig.update_layout(xaxis_tickangle=-20)
-        st.plotly_chart(fig, use_container_width=True)
+        pay_aov["AOV"] = pay_aov["AOV"].fillna(0)
+        pay_aov = pay_aov[pay_aov["AOV"] > 0]
+        if pay_aov.empty:
+            st.info("No conversions in current filter.")
+        else:
+            fig = px.bar(pay_aov, x="Method", y="AOV",
+                         color="AOV", color_continuous_scale="Blues",
+                         text=pay_aov["AOV"].apply(lambda v: f"${v:.0f}"))
+            fig.update_traces(textposition="outside", textfont_size=11)
+            fig.update_layout(coloraxis_showscale=False)
+            style_layout(fig, "AOV by Payment Method ($)", height=300)
+            fig.update_layout(xaxis_tickangle=-20)
+            st.plotly_chart(fig, use_container_width=True)
 
     # ── Category × Traffic heatmap ────────────────────────────────────────
     st.markdown('<div class="section-header">Product Category × Traffic Source Conversion Heatmap</div>', unsafe_allow_html=True)
@@ -645,7 +658,8 @@ with tab5:
     df_c = df[df["Converted"] == "Yes"].copy()
     df_c["Engagement_Score"] = df_c["Time_Spent_on_Site"] * df_c["Pages_Viewed"]
 
-    if len(df_c) > 0:
+    if len(df_c) > 0 and df_c["Order_Value"].dropna().shape[0] > 0:
+        df_c = df_c.dropna(subset=["Order_Value", "Engagement_Score"])
         fig = px.scatter(
             df_c, x="Engagement_Score", y="Order_Value",
             color="Product_Category",
@@ -656,6 +670,8 @@ with tab5:
         style_layout(fig, "Engagement Score (Time × Pages) vs Order Value — Converted Customers", height=420)
         fig.update_layout(xaxis_title="Engagement Score", yaxis_title="Order Value ($)")
         st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("No converted customers in current filter selection.")
 
     # ── Correlation heatmap ────────────────────────────────────────────────
     st.markdown('<div class="section-header">Correlation Heatmap — Key Numeric Metrics</div>', unsafe_allow_html=True)
