@@ -47,7 +47,27 @@ DEVICE_COLORS = {
 # ── Data loading ─────────────────────────────────────────────────────────────
 @st.cache_data
 def load_data(path: str = "ecommerce_cleaned.csv") -> pd.DataFrame:
-    df = pd.read_csv(path)
+    import os
+    # Resolve path relative to this file's directory so it works on
+    # Streamlit Cloud (/mount/src/<repo>/) and locally alike
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    candidates = [
+        path,                                    # as-is (local run)
+        os.path.join(base_dir, path),            # same folder as utils.py
+        os.path.join(base_dir, "ecommerce_cleaned.csv"),
+    ]
+    resolved = None
+    for p in candidates:
+        if os.path.exists(p):
+            resolved = p
+            break
+    if resolved is None:
+        raise FileNotFoundError(
+            f"Cannot find ecommerce_cleaned.csv. "
+            f"Make sure it is committed to the root of your GitHub repo. "
+            f"Searched: {candidates}"
+        )
+    df = pd.read_csv(resolved)
     df["Abandonment_Point"]   = df["Abandonment_Point"].fillna("None")
     df["Product_Category_2"]  = df["Product_Category_2"].fillna("No Second Category")
     df["Converted_bin"]       = (df["Converted"] == "Yes").astype(int)
